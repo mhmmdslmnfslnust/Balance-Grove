@@ -1245,3 +1245,116 @@ body {
     gap: 1rem;
   }
 }
+
+/* Enhanced Gamified Stats */
+.level-indicator {
+  background: linear-gradient(135deg, #ffd700, #ff8c00) !important;
+  color: #000 !important;
+  padding: 0.2rem 0.6rem !important;
+  border-radius: 12px !important;
+  font-weight: bold !important;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3) !important;
+}
+
+.combo-stat {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a52) !important;
+  border-radius: 8px !important;
+  padding: 0.5rem !important;
+  animation: pulse 0.5s ease-in-out !important;
+}
+
+.combo-value {
+  color: #fff !important;
+  font-weight: bold !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+.perfect-moves {
+  color: #4ecdc4 !important;
+  font-weight: bold !important;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* Achievements Section */
+.achievements-section {
+  background: rgba(255, 215, 0, 0.1) !important;
+  border: 1px solid rgba(255, 215, 0, 0.3) !important;
+  border-radius: 12px !important;
+  padding: 1rem !important;
+}
+
+.achievements-section h3 {
+  color: #ffd700 !important;
+  margin-bottom: 1rem !important;
+}
+
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.8rem;
+}
+
+.achievement {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.8rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.achievement:hover {
+  background: rgba(255, 215, 0, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+}
+
+.achievement-icon {
+  font-size: 1.2rem;
+}
+
+.achievement-name {
+  font-weight: 600;
+  color: #e1e1e1;
+  font-size: 0.9rem;
+}
+
+/* Enhanced Stats Animations */
+.stat-value {
+  transition: all 0.3s ease !important;
+}
+
+.stat:hover .stat-value {
+  transform: scale(1.1) !important;
+  color: #4ecdc4 !important;
+}
+
+/* Score Animation */
+@keyframes scoreIncrease {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); color: #4ecdc4; }
+  100% { transform: scale(1); }
+}
+
+.score-animation {
+  animation: scoreIncrease 0.6s ease-out;
+}
+
+/* Level Up Effect */
+@keyframes levelUp {
+  0% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.3) rotate(5deg); }
+  50% { transform: scale(1.1) rotate(-5deg); }
+  75% { transform: scale(1.2) rotate(3deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.level-up-animation {
+  animation: levelUp 0.8s ease-out;
+}

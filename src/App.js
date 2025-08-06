@@ -251,6 +251,10 @@ function App() {
   const [dataMode, setDataMode] = useState('numbers'); // 'numbers', 'alphabet'
   const [score, setScore] = useState(0);
   const [moves, setMoves] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [perfectMoves, setPerfectMoves] = useState(0);
+  const [achievements, setAchievements] = useState(new Set());
+  const [level, setLevel] = useState(1);
   const [maxBalance, setMaxBalance] = useState(0);
   const [gameStatus, setGameStatus] = useState('playing');
   const [usedValues, setUsedValues] = useState(new Set());
@@ -313,6 +317,106 @@ function App() {
     return newValue;
   }, [usedValues, dataMode]);
 
+  // Enhanced Scoring and Gamification System
+  const calculateScore = useCallback((actionType, beforeBalance, afterBalance, isBalancing = false) => {
+    let basePoints = 0;
+    let multiplier = 1;
+    let newCombo = combo;
+    let bonusMessage = '';
+    
+    // Base points for different actions
+    switch (actionType) {
+      case 'add':
+        basePoints = 15;
+        if (afterBalance <= 1) {
+          basePoints += 10; // Bonus for keeping tree balanced
+          newCombo = combo + 1;
+          bonusMessage = 'Balanced Add!';
+        } else {
+          newCombo = 0; // Break combo if tree becomes imbalanced
+        }
+        break;
+        
+      case 'remove':
+        basePoints = 20;
+        if (afterBalance <= beforeBalance) {
+          basePoints += 15; // Bonus for improving balance
+          newCombo = combo + 1;
+          bonusMessage = 'Smart Remove!';
+        } else {
+          newCombo = Math.max(0, combo - 1);
+        }
+        break;
+        
+      case 'rotate':
+        basePoints = 25;
+        if (afterBalance < beforeBalance) {
+          basePoints += 20; // Major bonus for improving balance
+          newCombo = combo + 1;
+          bonusMessage = 'Perfect Rotation!';
+          setPerfectMoves(prev => prev + 1);
+        } else if (afterBalance === beforeBalance) {
+          basePoints += 5; // Small bonus for maintaining balance
+          bonusMessage = 'Stable Rotation';
+        } else {
+          basePoints = Math.max(5, basePoints - 10); // Penalty for worsening balance
+          newCombo = 0;
+          bonusMessage = 'Rotation Needed';
+        }
+        break;
+    }
+    
+    // Combo multiplier (up to 5x)
+    if (newCombo > 0) {
+      multiplier = Math.min(1 + (newCombo * 0.2), 5);
+      if (newCombo >= 5) bonusMessage += ' 🔥 ON FIRE!';
+      else if (newCombo >= 3) bonusMessage += ' 🌟 COMBO!';
+    }
+    
+    // Level multiplier
+    multiplier *= (1 + level * 0.1);
+    
+    const finalPoints = Math.round(basePoints * multiplier);
+    
+    setCombo(newCombo);
+    setScore(prev => prev + finalPoints);
+    
+    // Check for achievements
+    checkAchievements(newCombo, perfectMoves, afterBalance);
+    
+    // Level up system
+    const newScore = score + finalPoints;
+    const newLevel = Math.floor(newScore / 500) + 1;
+    if (newLevel > level) {
+      setLevel(newLevel);
+      bonusMessage += ` 🎉 LEVEL ${newLevel}!`;
+    }
+    
+    return { points: finalPoints, message: bonusMessage, combo: newCombo };
+  }, [combo, level, score, perfectMoves]);
+  
+  // Achievement system
+  const checkAchievements = useCallback((currentCombo, perfectMoveCount, balance) => {
+    const newAchievements = new Set(achievements);
+    
+    if (currentCombo >= 10 && !achievements.has('combo_master')) {
+      newAchievements.add('combo_master');
+    }
+    if (perfectMoveCount >= 5 && !achievements.has('rotation_expert')) {
+      newAchievements.add('rotation_expert');
+    }
+    if (balance === 0 && !achievements.has('perfect_balance')) {
+      newAchievements.add('perfect_balance');
+    }
+    if (level >= 5 && !achievements.has('tree_master')) {
+      newAchievements.add('tree_master');
+    }
+    
+    if (newAchievements.size > achievements.size) {
+      setAchievements(newAchievements);
+    }
+  }, [achievements, level]);
+
   const updateGameState = useCallback(() => {
     const data = tree.toArray();
     setTreeData(data);
@@ -345,7 +449,11 @@ function App() {
       tree: treeClone,
       usedValues: new Set(usedValues),
       score,
-      moves
+      moves,
+      combo,
+      perfectMoves,
+      level,
+      achievements: new Set(achievements)
     };
     
     setGameHistory(prev => [...prev.slice(-9), gameState]); // Keep last 10 states
@@ -400,6 +508,10 @@ function App() {
     setUsedValues(new Set(lastState.usedValues));
     setScore(lastState.score);
     setMoves(lastState.moves);
+    setCombo(lastState.combo || 0);
+    setPerfectMoves(lastState.perfectMoves || 0);
+    setLevel(lastState.level || 1);
+    setAchievements(new Set(lastState.achievements || []));
     setGameHistory(prev => prev.slice(0, -1));
     
     updateGameState();
@@ -427,7 +539,11 @@ function App() {
       tree: currentTree,
       usedValues: new Set(usedValues),
       score,
-      moves
+      moves,
+      combo,
+      perfectMoves,
+      level,
+      achievements: new Set(achievements)
     };
     
     setGameHistory(prev => [...prev.slice(-9), currentState]); // Keep last 10 states
@@ -453,6 +569,10 @@ function App() {
     setUsedValues(new Set(redoState.usedValues));
     setScore(redoState.score);
     setMoves(redoState.moves);
+    setCombo(redoState.combo || 0);
+    setPerfectMoves(redoState.perfectMoves || 0);
+    setLevel(redoState.level || 1);
+    setAchievements(new Set(redoState.achievements || []));
     setRedoHistory(prev => prev.slice(0, -1));
     
     updateGameState();
@@ -538,6 +658,9 @@ function App() {
       }
     }
     
+    // Get balance before action
+    const beforeBalance = tree.getMaxBalance();
+    
     if (treeMode === 'auto') {
       tree.root = tree.autoBalanceInsert(tree.root, processedValue);
     } else {
@@ -546,10 +669,14 @@ function App() {
     
     // Track the used value
     setUsedValues(prev => new Set(prev).add(processedValue));
+    
+    // Get balance after action and calculate score
+    const afterBalance = tree.getMaxBalance();
+    const scoreResult = calculateScore('add', beforeBalance, afterBalance);
+    
     setMoves(moves + 1);
-    setScore(score + 10);
     updateGameState();
-  }, [gameStatus, treeMode, tree, moves, score, updateGameState, usedValues, saveGameState, isProtectedMode, gameMode, dataMode]);
+  }, [gameStatus, treeMode, tree, moves, updateGameState, usedValues, saveGameState, isProtectedMode, gameMode, dataMode, calculateScore]);
 
   const removeNode = (value) => {
     if (gameStatus !== 'playing') return;
@@ -558,6 +685,9 @@ function App() {
     if (gameMode === 'demo') {
       saveGameState();
     }
+    
+    // Get balance before action
+    const beforeBalance = tree.getMaxBalance();
     
     tree.remove(value);
     
@@ -568,15 +698,50 @@ function App() {
       return newSet;
     });
     
+    // Get balance after action and calculate score
+    const afterBalance = tree.getMaxBalance();
+    const scoreResult = calculateScore('remove', beforeBalance, afterBalance);
+    
     setMoves(moves + 1);
-    setScore(score + 5);
     setSelectedNode(null);
     updateGameState();
   };
 
   const plantTree = () => {
-    const randomValue = generateRandomValue();
-    addNode(randomValue);
+    if (gameStatus !== 'playing') return;
+    
+    // Save state before making changes (for undo)
+    if (gameMode === 'demo') {
+      saveGameState();
+    }
+    
+    // Add a preset tree based on the current data mode
+    let presetValues;
+    if (dataMode === 'alphabet') {
+      presetValues = ['M', 'F', 'T', 'B', 'J', 'P', 'Z'];
+    } else {
+      presetValues = [50, 30, 70, 20, 40, 60, 80];
+    }
+    
+    presetValues.forEach(val => {
+      if (!usedValues.has(val)) { // Only add if not already used
+        if (treeMode === 'auto') {
+          tree.root = tree.autoBalanceInsert(tree.root, val);
+        } else {
+          tree.add(val);
+        }
+      }
+    });
+    
+    // Update used values
+    const newUsedValues = new Set(usedValues);
+    presetValues.forEach(val => newUsedValues.add(val));
+    setUsedValues(newUsedValues);
+    
+    // Give modest preset bonus
+    setMoves(moves + presetValues.length);
+    setScore(prev => prev + (presetValues.length * 20)); // Modest bonus for preset
+    updateGameState();
   };
 
   const addCustomNode = () => {
@@ -604,10 +769,17 @@ function App() {
     if (dir === 'left' && !targetNode.right) return;
     if (dir === 'right' && !targetNode.left) return;
     
+    // Get balance before rotation
+    const beforeBalance = tree.getMaxBalance();
+    
     if (dir === 'left') tree.manualRotateLeft(value);
     if (dir === 'right') tree.manualRotateRight(value);
+    
+    // Get balance after rotation and calculate score
+    const afterBalance = tree.getMaxBalance();
+    const scoreResult = calculateScore('rotate', beforeBalance, afterBalance);
+    
     setMoves(moves + 1);
-    setScore(score + 5);
     setSelectedNode(null);
     updateGameState();
   };
@@ -617,6 +789,10 @@ function App() {
     setTreeData({ nodes: [], edges: [] });
     setScore(0);
     setMoves(0);
+    setCombo(0);
+    setPerfectMoves(0);
+    setLevel(1);
+    setAchievements(new Set());
     setMaxBalance(0);
     setGameStatus('playing');
     setUsedValues(new Set());
@@ -772,19 +948,35 @@ function App() {
         </div>
         <div className="stats">
           <div className="stat">
-            <span className="stat-label">Score</span>
-            <span className="stat-value">{score}</span>
+            <span className="stat-label">💎 Score</span>
+            <span className="stat-value">{score.toLocaleString()}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">Moves</span>
+            <span className="stat-label">🎯 Moves</span>
             <span className="stat-value">{moves}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">Max Balance</span>
+            <span className="stat-label">⭐ Level</span>
+            <span className="stat-value level-indicator">{level}</span>
+          </div>
+          {combo > 0 && (
+            <div className="stat combo-stat">
+              <span className="stat-label">🔥 Combo</span>
+              <span className="stat-value combo-value">{combo}x</span>
+            </div>
+          )}
+          <div className="stat">
+            <span className="stat-label">Balance</span>
             <span className={`stat-value ${maxBalance > 1 ? 'warning' : 'good'}`}>
               {maxBalance > 1 ? '⚠️ ' + maxBalance : '✅ ' + maxBalance}
             </span>
           </div>
+          {perfectMoves > 0 && (
+            <div className="stat">
+              <span className="stat-label">🎯 Perfect</span>
+              <span className="stat-value perfect-moves">{perfectMoves}</span>
+            </div>
+          )}
         </div>
       </header>
 
@@ -978,7 +1170,7 @@ function App() {
                   disabled={gameStatus !== 'playing'}
                   className="plant-btn"
                 >
-                  🌱 Add Random Tree
+                  � Add Preset Tree
                 </button>
               )}
             </div>
@@ -1019,6 +1211,39 @@ function App() {
               </button>
             </div>
           </div>
+          
+          {/* Achievements Panel */}
+          {achievements.size > 0 && (
+            <div className="control-section achievements-section">
+              <h3>🏆 Achievements</h3>
+              <div className="achievements-grid">
+                {achievements.has('combo_master') && (
+                  <div className="achievement">
+                    <span className="achievement-icon">🔥</span>
+                    <span className="achievement-name">Combo Master</span>
+                  </div>
+                )}
+                {achievements.has('rotation_expert') && (
+                  <div className="achievement">
+                    <span className="achievement-icon">🎯</span>
+                    <span className="achievement-name">Rotation Expert</span>
+                  </div>
+                )}
+                {achievements.has('perfect_balance') && (
+                  <div className="achievement">
+                    <span className="achievement-icon">⚖️</span>
+                    <span className="achievement-name">Perfect Balance</span>
+                  </div>
+                )}
+                {achievements.has('tree_master') && (
+                  <div className="achievement">
+                    <span className="achievement-icon">🌳</span>
+                    <span className="achievement-name">Tree Master</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
