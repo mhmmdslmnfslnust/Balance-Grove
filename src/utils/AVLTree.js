@@ -21,10 +21,19 @@ export default class AVLTree {
     return node.height;
   }
 
-  // Helper to get balance factor
+  // Helper to get balance factor for any node
   getBalanceFactor(node = this.root) {
     if (!node) return 0;
     return this.getHeight(node.left) - this.getHeight(node.right);
+  }
+
+  // Get maximum balance factor in the tree
+  getMaxBalanceFactor(node = this.root) {
+    if (!node) return 0;
+    const nodeBalance = Math.abs(this.getBalanceFactor(node));
+    const leftBalance = this.getMaxBalanceFactor(node.left);
+    const rightBalance = this.getMaxBalanceFactor(node.right);
+    return Math.max(nodeBalance, leftBalance, rightBalance);
   }
 
   // Right rotate
