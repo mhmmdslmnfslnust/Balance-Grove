@@ -34,6 +34,7 @@ class AVLTree {
   }
 
   rotateRight(y) {
+    if (!y || !y.left) return y; // Safety check
     const x = y.left;
     const T2 = x.right;
     x.right = y;
@@ -44,6 +45,7 @@ class AVLTree {
   }
 
   rotateLeft(x) {
+    if (!x || !x.right) return x; // Safety check
     const y = x.right;
     const T2 = y.left;
     y.left = x;
@@ -55,7 +57,6 @@ class AVLTree {
 
   insert(node, value) {
     if (!node) return new TreeNode(value);
-
     if (value < node.value) {
       node.left = this.insert(node.left, value);
     } else if (value > node.value) {
@@ -63,34 +64,32 @@ class AVLTree {
     } else {
       return node;
     }
-
     this.updateHeight(node);
-    const balance = this.getBalance(node);
-
-    // Left Left
-    if (balance > 1 && value < node.left.value) {
-      return this.rotateRight(node);
-    }
-    // Right Right
-    if (balance < -1 && value > node.right.value) {
-      return this.rotateLeft(node);
-    }
-    // Left Right
-    if (balance > 1 && value > node.left.value) {
-      node.left = this.rotateLeft(node.left);
-      return this.rotateRight(node);
-    }
-    // Right Left
-    if (balance < -1 && value < node.right.value) {
-      node.right = this.rotateRight(node.right);
-      return this.rotateLeft(node);
-    }
-
     return node;
   }
 
   add(value) {
     this.root = this.insert(this.root, value);
+  }
+
+  // Manual rotation at a node with given value
+  manualRotateLeft(value) {
+    this.root = this._manualRotate(this.root, value, 'left');
+  }
+  manualRotateRight(value) {
+    this.root = this._manualRotate(this.root, value, 'right');
+  }
+  _manualRotate(node, value, dir) {
+    if (!node) return null;
+    if (node.value === value) {
+      if (dir === 'left' && node.right) return this.rotateLeft(node);
+      if (dir === 'right' && node.left) return this.rotateRight(node);
+      return node; // Can't rotate if no child in that direction
+    }
+    node.left = this._manualRotate(node.left, value, dir);
+    node.right = this._manualRotate(node.right, value, dir);
+    this.updateHeight(node);
+    return node;
   }
 
   getMaxBalance() {
@@ -133,13 +132,17 @@ function App() {
   const [maxBalance, setMaxBalance] = useState(0);
   const [gameStatus, setGameStatus] = useState('playing');
   const [nextValue, setNextValue] = useState(1);
+  const [imbalancedNodes, setImbalancedNodes] = useState([]);
+  const [selectedNode, setSelectedNode] = useState(null);
 
   const updateGameState = useCallback(() => {
     const nodeArray = tree.toArray();
     setNodes(nodeArray);
     const balance = tree.getMaxBalance();
     setMaxBalance(balance);
-    
+    // Find imbalanced nodes
+    const imbalanced = nodeArray.filter(n => Math.abs(n.balance) > 1).map(n => n.value);
+    setImbalancedNodes(imbalanced);
     if (balance > 2) {
       setGameStatus('lost');
     }
@@ -147,11 +150,37 @@ function App() {
 
   const plantTree = () => {
     if (gameStatus !== 'playing') return;
-    
     tree.add(nextValue);
     setNextValue(nextValue + 1);
     setMoves(moves + 1);
     setScore(score + 10);
+    updateGameState();
+  };
+
+  const rotateNode = (value, dir) => {
+    if (gameStatus !== 'playing') return;
+    
+    // Find the node in the tree to check if rotation is possible
+    const findNode = (node, targetValue) => {
+      if (!node) return null;
+      if (node.value === targetValue) return node;
+      const leftResult = findNode(node.left, targetValue);
+      if (leftResult) return leftResult;
+      return findNode(node.right, targetValue);
+    };
+    
+    const targetNode = findNode(tree.root, value);
+    if (!targetNode) return;
+    
+    // Check if rotation is possible
+    if (dir === 'left' && !targetNode.right) return;
+    if (dir === 'right' && !targetNode.left) return;
+    
+    if (dir === 'left') tree.manualRotateLeft(value);
+    if (dir === 'right') tree.manualRotateRight(value);
+    setMoves(moves + 1);
+    setScore(score + 5);
+    setSelectedNode(null);
     updateGameState();
   };
 
@@ -234,20 +263,20 @@ function App() {
           <svg width="100%" height="400" viewBox="0 0 800 400">
             {nodes.map((node, index) => (
               <g key={node.value}>
-                {/* Tree */}
                 <circle
                   cx={node.x}
                   cy={node.y}
                   r="20"
                   fill={Math.abs(node.balance) > 1 ? '#ff6b6b' : '#4caf50'}
-                  stroke={Math.abs(node.balance) > 1 ? '#d32f2f' : '#2e7d32'}
-                  strokeWidth="2"
+                  stroke={imbalancedNodes.includes(node.value) ? '#ffd600' : (Math.abs(node.balance) > 1 ? '#d32f2f' : '#2e7d32')}
+                  strokeWidth={selectedNode === node.value ? 5 : 2}
                   style={{
                     filter: Math.abs(node.balance) > 1 ? 'drop-shadow(0 0 10px rgba(255,0,0,0.5))' : 'none',
-                    animation: Math.abs(node.balance) > 1 ? 'shake 0.5s infinite' : 'none'
+                    animation: Math.abs(node.balance) > 1 ? 'shake 0.5s infinite' : 'none',
+                    cursor: imbalancedNodes.includes(node.value) ? 'pointer' : 'default'
                   }}
+                  onClick={() => imbalancedNodes.includes(node.value) && setSelectedNode(node.value)}
                 />
-                {/* Tree trunk */}
                 <rect
                   x={node.x - 3}
                   y={node.y + 15}
@@ -255,7 +284,6 @@ function App() {
                   height="15"
                   fill="#8d6e63"
                 />
-                {/* Value label for debugging */}
                 <text
                   x={node.x}
                   y={node.y + 5}
@@ -266,6 +294,89 @@ function App() {
                 >
                   {node.value}
                 </text>
+                {/* Balance factor display */}
+                <text
+                  x={node.x}
+                  y={node.y - 30}
+                  textAnchor="middle"
+                  fill={Math.abs(node.balance) > 1 ? '#ff1744' : '#2e7d32'}
+                  fontSize="10"
+                  fontWeight="bold"
+                >
+                  BF: {node.balance}
+                </text>
+                {/* Rotation controls for selected node */}
+                {selectedNode === node.value && (
+                  <g>
+                    <rect x={node.x - 50} y={node.y - 50} width="100" height="40" rx="8" fill="#fffde7" stroke="#ffd600" strokeWidth="2" />
+                    <text x={node.x} y={node.y - 35} textAnchor="middle" fill="#333" fontSize="12" fontWeight="bold">Choose Rotation</text>
+                    {/* Left rotation button - only if right child exists */}
+                    {(() => {
+                      const findNode = (n, val) => {
+                        if (!n) return null;
+                        if (n.value === val) return n;
+                        return findNode(n.left, val) || findNode(n.right, val);
+                      };
+                      const targetNode = findNode(tree.root, node.value);
+                      const canRotateLeft = targetNode && targetNode.right;
+                      const canRotateRight = targetNode && targetNode.left;
+                      
+                      return (
+                        <>
+                          <rect 
+                            x={node.x - 45} 
+                            y={node.y - 25} 
+                            width="35" 
+                            height="18" 
+                            rx="4" 
+                            fill={canRotateLeft ? "#4caf50" : "#cccccc"} 
+                            style={{ cursor: canRotateLeft ? 'pointer' : 'not-allowed' }} 
+                            onClick={canRotateLeft ? () => rotateNode(node.value, 'left') : undefined} 
+                          />
+                          <text 
+                            x={node.x - 27.5} 
+                            y={node.y - 13} 
+                            textAnchor="middle" 
+                            fill="white" 
+                            fontSize="10" 
+                            fontWeight="bold"
+                            style={{ cursor: canRotateLeft ? 'pointer' : 'not-allowed' }} 
+                            onClick={canRotateLeft ? () => rotateNode(node.value, 'left') : undefined}
+                          >
+                            ⟲ Left
+                          </text>
+                          
+                          <rect 
+                            x={node.x + 10} 
+                            y={node.y - 25} 
+                            width="35" 
+                            height="18" 
+                            rx="4" 
+                            fill={canRotateRight ? "#4caf50" : "#cccccc"} 
+                            style={{ cursor: canRotateRight ? 'pointer' : 'not-allowed' }} 
+                            onClick={canRotateRight ? () => rotateNode(node.value, 'right') : undefined} 
+                          />
+                          <text 
+                            x={node.x + 27.5} 
+                            y={node.y - 13} 
+                            textAnchor="middle" 
+                            fill="white" 
+                            fontSize="10" 
+                            fontWeight="bold"
+                            style={{ cursor: canRotateRight ? 'pointer' : 'not-allowed' }} 
+                            onClick={canRotateRight ? () => rotateNode(node.value, 'right') : undefined}
+                          >
+                            ⟳ Right
+                          </text>
+                        </>
+                      );
+                    })()}
+                    
+                    {/* Cancel button */}
+                    <rect x={node.x - 15} y={node.y + 5} width="30" height="15" rx="3" fill="#ff9800" style={{ cursor: 'pointer' }} onClick={() => setSelectedNode(null)} />
+                    <text x={node.x} y={node.y + 15} textAnchor="middle" fill="white" fontSize="9" style={{ cursor: 'pointer' }} onClick={() => setSelectedNode(null)}>Cancel</text>
+                  </g>
+                )}
               </g>
             ))}
           </svg>
@@ -296,6 +407,11 @@ function App() {
         {maxBalance > 1 && gameStatus === 'playing' && (
           <div className="warning-message">
             ⚠️ The grove is becoming imbalanced! Current balance: {maxBalance}
+            {imbalancedNodes.length > 0 && (
+              <div style={{ marginTop: '0.5rem', color: '#d32f2f' }}>
+                Select a red tree and choose a rotation to restore balance.
+              </div>
+            )}
           </div>
         )}
       </main>
