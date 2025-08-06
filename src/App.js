@@ -263,6 +263,7 @@ function App() {
   const [panY, setPanY] = useState(0);
   const [isProtectedMode, setIsProtectedMode] = useState(true); // For demo mode
   const [gameHistory, setGameHistory] = useState([]); // For undo functionality
+  const [redoHistory, setRedoHistory] = useState([]); // For redo functionality
   const [removeValue, setRemoveValue] = useState(''); // For removing specific nodes
 
   // Generate random unique value for BST
@@ -348,11 +349,35 @@ function App() {
     };
     
     setGameHistory(prev => [...prev.slice(-9), gameState]); // Keep last 10 states
+    setRedoHistory([]); // Clear redo history when new action is made
   }, [tree, usedValues, score, moves]);
 
   // Undo last action
   const undoLastAction = useCallback(() => {
     if (gameHistory.length === 0) return;
+    
+    // Save current state to redo history before undoing
+    const currentTree = new AVLTree();
+    if (tree.root) {
+      const traverse = (node) => {
+        if (!node) return null;
+        const newNode = new TreeNode(node.value);
+        newNode.height = node.height;
+        newNode.left = traverse(node.left);
+        newNode.right = traverse(node.right);
+        return newNode;
+      };
+      currentTree.root = traverse(tree.root);
+    }
+    
+    const currentState = {
+      tree: currentTree,
+      usedValues: new Set(usedValues),
+      score,
+      moves
+    };
+    
+    setRedoHistory(prev => [...prev.slice(-9), currentState]); // Keep last 10 redo states
     
     const lastState = gameHistory[gameHistory.length - 1];
     
@@ -378,7 +403,60 @@ function App() {
     setGameHistory(prev => prev.slice(0, -1));
     
     updateGameState();
-  }, [gameHistory, tree, updateGameState]);
+  }, [gameHistory, tree, updateGameState, usedValues, score, moves]);
+
+  // Redo last undone action
+  const redoLastAction = useCallback(() => {
+    if (redoHistory.length === 0) return;
+    
+    // Save current state to undo history before redoing
+    const currentTree = new AVLTree();
+    if (tree.root) {
+      const traverse = (node) => {
+        if (!node) return null;
+        const newNode = new TreeNode(node.value);
+        newNode.height = node.height;
+        newNode.left = traverse(node.left);
+        newNode.right = traverse(node.right);
+        return newNode;
+      };
+      currentTree.root = traverse(tree.root);
+    }
+    
+    const currentState = {
+      tree: currentTree,
+      usedValues: new Set(usedValues),
+      score,
+      moves
+    };
+    
+    setGameHistory(prev => [...prev.slice(-9), currentState]); // Keep last 10 states
+    
+    const redoState = redoHistory[redoHistory.length - 1];
+    
+    // Restore tree state from redo
+    if (redoState.tree.root) {
+      const traverse = (node) => {
+        if (!node) return null;
+        const newNode = new TreeNode(node.value);
+        newNode.height = node.height;
+        newNode.left = traverse(node.left);
+        newNode.right = traverse(node.right);
+        return newNode;
+      };
+      tree.root = traverse(redoState.tree.root);
+    } else {
+      tree.root = null;
+    }
+    
+    // Restore other state
+    setUsedValues(new Set(redoState.usedValues));
+    setScore(redoState.score);
+    setMoves(redoState.moves);
+    setRedoHistory(prev => prev.slice(0, -1));
+    
+    updateGameState();
+  }, [redoHistory, tree, updateGameState, usedValues, score, moves]);
 
   // Zoom and pan controls
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.2, 3));
@@ -546,6 +624,7 @@ function App() {
     setCustomValue('');
     setRemoveValue('');
     setGameHistory([]);
+    setRedoHistory([]);
   };
 
   const removeNodeByValue = () => {
@@ -564,31 +643,7 @@ function App() {
     setGameMode(mode);
     setTreeMode(initialTreeMode);
     
-    if (mode === 'puzzle') {
-      // Add some initial trees for puzzle mode
-      const initialValues = [10, 5, 15, 3, 7];
-      initialValues.forEach(val => {
-        tree.add(val);
-      });
-      setUsedValues(new Set(initialValues));
-    } else if (mode === 'demo') {
-      // Demo mode with auto-balancing
-      const demoValues = [50, 30, 70, 20, 40, 60, 80];
-      demoValues.forEach(val => {
-        if (initialTreeMode === 'auto') {
-          tree.root = tree.autoBalanceInsert(tree.root, val);
-        } else {
-          tree.add(val);
-        }
-      });
-      setUsedValues(new Set(demoValues));
-    } else {
-      // Interactive or endless mode
-      if (mode === 'endless') {
-        tree.add(50);
-        setUsedValues(new Set([50]));
-      }
-    }
+    // Removed automatic preset trees - users can click preset buttons instead
     updateGameState();
   };
 
@@ -810,7 +865,8 @@ function App() {
                     onClick={() => {
                       if (treeMode === 'interactive') {
                         setSelectedNode(selectedNode === node.value ? null : node.value);
-                      } else if (treeMode === 'manual' && isImbalanced) {
+                      } else if (treeMode === 'manual') {
+                        // Allow selection of any node in manual mode for learning
                         setSelectedNode(node.value);
                       }
                     }}
@@ -946,6 +1002,13 @@ function App() {
                   >
                     ↶ Undo ({gameHistory.length})
                   </button>
+                  <button 
+                    onClick={redoLastAction} 
+                    disabled={redoHistory.length === 0}
+                    className="redo-btn"
+                  >
+                    ↷ Redo ({redoHistory.length})
+                  </button>
                 </>
               )}
               <button onClick={resetGame} className="reset-btn">
@@ -972,6 +1035,8 @@ function App() {
                   return findNode(n.left, val) || findNode(n.right, val);
                 };
                 const targetNode = findNode(tree.root, selectedNode);
+                
+                // Allow rotation if node has the appropriate child - let user decide when to rotate
                 const canRotateLeft = targetNode && targetNode.right;
                 const canRotateRight = targetNode && targetNode.left;
                 
