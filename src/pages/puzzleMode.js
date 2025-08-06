@@ -70,10 +70,8 @@ export default function PuzzleMode() {
 
     if (action === 'plant') {
       setSelectedAction('plant');
-      setSelectedValue(null);
     } else if (action === 'prune') {
       setSelectedAction('prune');
-      setSelectedValue(null);
     } else if (action === 'reset') {
       preloadTree(level.initialTrees);
       setMoves(0);
