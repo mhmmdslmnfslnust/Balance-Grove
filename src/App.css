@@ -71,6 +71,53 @@ body {
   line-height: 1.6;
 }
 
+/* Data Mode Selection */
+.data-mode-selection {
+  margin: 2rem 0 3rem;
+  text-align: center;
+}
+
+.data-mode-selection h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #e1e1e1;
+}
+
+.toggle-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.toggle-buttons button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  color: #b0b0b0;
+  padding: 1rem 2rem;
+  border-radius: 15px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  min-width: 160px;
+}
+
+.toggle-buttons button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(102, 126, 234, 0.4);
+  color: #e1e1e1;
+  transform: translateY(-2px);
+}
+
+.toggle-buttons button.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: white;
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+}
+
 .mode-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -357,7 +404,15 @@ body {
   filter: drop-shadow(0 0 20px rgba(102, 126, 234, 0.1));
 }
 
-/* Enhanced Tree Edges - REMOVED */
+/* Tree Edges */
+.tree-edge {
+  transition: all 0.3s ease;
+}
+
+.tree-edge:hover {
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 3;
+}
 
 /* Enhanced Tree Nodes */
 .tree-node {

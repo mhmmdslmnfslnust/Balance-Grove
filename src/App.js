@@ -611,6 +611,24 @@ function App() {
           <h1>🌳 Balance Grove 🌳</h1>
           <p>Experience AVL Tree balancing in multiple ways!</p>
           
+          <div className="data-mode-selection">
+            <h3>Data Type:</h3>
+            <div className="toggle-buttons">
+              <button 
+                className={dataMode === 'numbers' ? 'active' : ''}
+                onClick={() => setDataMode('numbers')}
+              >
+                🔢 Numbers (1-99)
+              </button>
+              <button 
+                className={dataMode === 'alphabet' ? 'active' : ''}
+                onClick={() => setDataMode('alphabet')}
+              >
+                🔤 Letters (A-Z)
+              </button>
+            </div>
+          </div>
+          
           <div className="mode-grid">
             <div className="mode-card">
               <h3>🎮 Interactive Mode</h3>
@@ -748,7 +766,21 @@ function App() {
             </defs>
             
             <g transform={`translate(${panX}, ${panY}) scale(${zoomLevel})`}>
-            {/* Render nodes only */}
+            {/* Render edges first */}
+            {treeData.edges.map((edge, index) => (
+              <line
+                key={`edge-${index}`}
+                x1={edge.x1}
+                y1={edge.y1}
+                x2={edge.x2}
+                y2={edge.y2}
+                stroke="rgba(255, 255, 255, 0.2)"
+                strokeWidth="2"
+                className="tree-edge"
+              />
+            ))}
+            
+            {/* Render nodes */}
             {treeData.nodes.map((node, index) => {
               const isImbalanced = Math.abs(node.balance) > 1;
               const isSelected = selectedNode === node.value;
@@ -834,10 +866,11 @@ function App() {
                 <>
                   <div className="input-group">
                     <input
-                      type="number"
+                      type="text"
                       value={customValue}
                       onChange={(e) => setCustomValue(e.target.value)}
-                      placeholder="Add value"
+                      placeholder={dataMode === 'alphabet' ? 'Add letter (A-Z)' : 'Add value (1-99)'}
+                      maxLength={dataMode === 'alphabet' ? 1 : undefined}
                       onKeyPress={(e) => e.key === 'Enter' && addCustomNode()}
                     />
                     <button onClick={addCustomNode} disabled={gameStatus !== 'playing'}>
@@ -846,10 +879,11 @@ function App() {
                   </div>
                   <div className="input-group">
                     <input
-                      type="number"
+                      type="text"
                       value={removeValue}
                       onChange={(e) => setRemoveValue(e.target.value)}
-                      placeholder="Remove value"
+                      placeholder={dataMode === 'alphabet' ? 'Remove letter' : 'Remove value'}
+                      maxLength={dataMode === 'alphabet' ? 1 : undefined}
                       onKeyPress={(e) => e.key === 'Enter' && removeNodeByValue()}
                     />
                     <button onClick={removeNodeByValue} disabled={gameStatus !== 'playing'}>
@@ -861,10 +895,11 @@ function App() {
                 <>
                   <div className="input-group">
                     <input
-                      type="number"
+                      type="text"
                       value={customValue}
                       onChange={(e) => setCustomValue(e.target.value)}
-                      placeholder="Enter value"
+                      placeholder={dataMode === 'alphabet' ? 'Enter letter (A-Z)' : 'Enter value (1-99)'}
+                      maxLength={dataMode === 'alphabet' ? 1 : undefined}
                       onKeyPress={(e) => e.key === 'Enter' && addCustomNode()}
                     />
                     <button onClick={addCustomNode} disabled={gameStatus !== 'playing'}>
