@@ -19,6 +19,26 @@ class AVLTree {
     this.root = null;
   }
 
+  // Compare function that handles both numbers and letters
+  compare(a, b) {
+    // Convert to string for consistent comparison
+    const aStr = String(a).toLowerCase();
+    const bStr = String(b).toLowerCase();
+    
+    // If both are numbers, compare numerically
+    if (!isNaN(a) && !isNaN(b)) {
+      return Number(a) - Number(b);
+    }
+    
+    // If both are single characters, compare alphabetically
+    if (aStr.length === 1 && bStr.length === 1 && /[a-z]/.test(aStr) && /[a-z]/.test(bStr)) {
+      return aStr.charCodeAt(0) - bStr.charCodeAt(0);
+    }
+    
+    // Default string comparison
+    return aStr.localeCompare(bStr);
+  }
+
   getHeight(node) {
     return node ? node.height : 0;
   }
@@ -57,12 +77,13 @@ class AVLTree {
 
   insert(node, value) {
     if (!node) return new TreeNode(value);
-    if (value < node.value) {
+    const cmp = this.compare(value, node.value);
+    if (cmp < 0) {
       node.left = this.insert(node.left, value);
-    } else if (value > node.value) {
+    } else if (cmp > 0) {
       node.right = this.insert(node.right, value);
     } else {
-      return node;
+      return node; // Duplicate value
     }
     this.updateHeight(node);
     return node;
@@ -103,12 +124,109 @@ class AVLTree {
     return checkBalance(this.root);
   }
 
+  // Auto-balancing insert
+  autoBalanceInsert(node, value) {
+    if (!node) return new TreeNode(value);
+    const cmp = this.compare(value, node.value);
+    if (cmp < 0) {
+      node.left = this.autoBalanceInsert(node.left, value);
+    } else if (cmp > 0) {
+      node.right = this.autoBalanceInsert(node.right, value);
+    } else {
+      return node;
+    }
+    
+    this.updateHeight(node);
+    const balance = this.getBalance(node);
+    
+    // Auto-balance the tree
+    const leftCmp = node.left ? this.compare(value, node.left.value) : 0;
+    const rightCmp = node.right ? this.compare(value, node.right.value) : 0;
+    
+    if (balance > 1 && leftCmp < 0) {
+      return this.rotateRight(node);
+    }
+    if (balance < -1 && rightCmp > 0) {
+      return this.rotateLeft(node);
+    }
+    if (balance > 1 && leftCmp > 0) {
+      node.left = this.rotateLeft(node.left);
+      return this.rotateRight(node);
+    }
+    if (balance < -1 && value < node.right.value) {
+      node.right = this.rotateRight(node.right);
+      return this.rotateLeft(node);
+    }
+    
+    return node;
+  }
+
+  // Remove node
+  remove(value) {
+    this.root = this._remove(this.root, value);
+  }
+
+  _remove(node, value) {
+    if (!node) return null;
+    
+    const cmp = this.compare(value, node.value);
+    if (cmp < 0) {
+      node.left = this._remove(node.left, value);
+    } else if (cmp > 0) {
+      node.right = this._remove(node.right, value);
+    } else {
+      // Node to be deleted found
+      if (!node.left || !node.right) {
+        node = node.left || node.right;
+      } else {
+        // Node with two children
+        const minRight = this._findMin(node.right);
+        node.value = minRight.value;
+        node.right = this._remove(node.right, minRight.value);
+      }
+    }
+    
+    if (!node) return node;
+    this.updateHeight(node);
+    return node;
+  }
+
+  _findMin(node) {
+    while (node.left) node = node.left;
+    return node;
+  }
+
   toArray() {
     const result = [];
-    const inorder = (node, x = 400, y = 60, xOffset = 100) => {
+    const edges = [];
+    
+    const traverse = (node, x = 400, y = 80, xOffset = 120) => {
       if (!node) return x;
       
-      const leftX = inorder(node.left, x - xOffset, y + 80, xOffset * 0.7);
+      const leftX = traverse(node.left, x - xOffset, y + 80, xOffset * 0.6);
+      
+      // Add edges with source/target values
+      if (node.left) {
+        edges.push({
+          x1: leftX,
+          y1: y,
+          x2: leftX - xOffset,
+          y2: y + 80,
+          sourceValue: node.value,
+          targetValue: node.left.value
+        });
+      }
+      if (node.right) {
+        edges.push({
+          x1: leftX,
+          y1: y,
+          x2: leftX + xOffset * 2,
+          y2: y + 80,
+          sourceValue: node.value,
+          targetValue: node.right.value
+        });
+      }
+      
       result.push({ 
         value: node.value, 
         x: leftX, 
@@ -116,45 +234,277 @@ class AVLTree {
         balance: this.getBalance(node),
         height: node.height 
       });
-      return inorder(node.right, leftX + xOffset * 2, y + 80, xOffset * 0.7);
+      
+      return traverse(node.right, leftX + xOffset * 2, y + 80, xOffset * 0.6);
     };
-    inorder(this.root);
-    return result;
+    
+    traverse(this.root);
+    return { nodes: result, edges };
   }
 }
 
 function App() {
   const [tree] = useState(() => new AVLTree());
-  const [nodes, setNodes] = useState([]);
+  const [treeData, setTreeData] = useState({ nodes: [], edges: [] });
   const [gameMode, setGameMode] = useState('menu');
+  const [treeMode, setTreeMode] = useState('manual'); // 'manual', 'auto', 'interactive'
+  const [dataMode, setDataMode] = useState('numbers'); // 'numbers', 'alphabet'
   const [score, setScore] = useState(0);
   const [moves, setMoves] = useState(0);
   const [maxBalance, setMaxBalance] = useState(0);
   const [gameStatus, setGameStatus] = useState('playing');
-  const [nextValue, setNextValue] = useState(1);
+  const [usedValues, setUsedValues] = useState(new Set());
   const [imbalancedNodes, setImbalancedNodes] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [customValue, setCustomValue] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isProtectedMode, setIsProtectedMode] = useState(true); // For demo mode
+  const [gameHistory, setGameHistory] = useState([]); // For undo functionality
+  const [removeValue, setRemoveValue] = useState(''); // For removing specific nodes
+
+  // Generate random unique value for BST
+  const generateRandomValue = useCallback(() => {
+    let attempts = 0;
+    let newValue;
+    
+    if (dataMode === 'alphabet') {
+      do {
+        // Generate random uppercase letter A-Z
+        newValue = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        attempts++;
+        
+        // Prevent infinite loop if we run out of values
+        if (attempts > 100) {
+          // Find first available letter if random generation fails
+          for (let i = 0; i < 26; i++) {
+            const letter = String.fromCharCode(65 + i);
+            if (!usedValues.has(letter)) {
+              newValue = letter;
+              break;
+            }
+          }
+          break;
+        }
+      } while (usedValues.has(newValue));
+    } else {
+      do {
+        // Generate random value between 1-99
+        newValue = Math.floor(Math.random() * 99) + 1;
+        attempts++;
+        
+        // Prevent infinite loop if we run out of values
+        if (attempts > 100) {
+          // Find first available value if random generation fails
+          for (let i = 1; i <= 99; i++) {
+            if (!usedValues.has(i)) {
+              newValue = i;
+              break;
+            }
+          }
+          break;
+        }
+      } while (usedValues.has(newValue));
+    }
+    
+    return newValue;
+  }, [usedValues, dataMode]);
 
   const updateGameState = useCallback(() => {
-    const nodeArray = tree.toArray();
-    setNodes(nodeArray);
+    const data = tree.toArray();
+    setTreeData(data);
     const balance = tree.getMaxBalance();
     setMaxBalance(balance);
     // Find imbalanced nodes
-    const imbalanced = nodeArray.filter(n => Math.abs(n.balance) > 1).map(n => n.value);
+    const imbalanced = data.nodes.filter(n => Math.abs(n.balance) > 1).map(n => n.value);
     setImbalancedNodes(imbalanced);
-    if (balance > 2) {
+    if (balance > 2 && treeMode === 'manual' && isProtectedMode) {
       setGameStatus('lost');
     }
-  }, [tree]);
+  }, [tree, treeMode, isProtectedMode]);
 
-  const plantTree = () => {
+  // Save current game state for undo functionality
+  const saveGameState = useCallback(() => {
+    const treeClone = new AVLTree();
+    if (tree.root) {
+      const traverse = (node) => {
+        if (!node) return null;
+        const newNode = new TreeNode(node.value);
+        newNode.height = node.height;
+        newNode.left = traverse(node.left);
+        newNode.right = traverse(node.right);
+        return newNode;
+      };
+      treeClone.root = traverse(tree.root);
+    }
+    
+    const gameState = {
+      tree: treeClone,
+      usedValues: new Set(usedValues),
+      score,
+      moves
+    };
+    
+    setGameHistory(prev => [...prev.slice(-9), gameState]); // Keep last 10 states
+  }, [tree, usedValues, score, moves]);
+
+  // Undo last action
+  const undoLastAction = useCallback(() => {
+    if (gameHistory.length === 0) return;
+    
+    const lastState = gameHistory[gameHistory.length - 1];
+    
+    // Restore tree state
+    if (lastState.tree.root) {
+      const traverse = (node) => {
+        if (!node) return null;
+        const newNode = new TreeNode(node.value);
+        newNode.height = node.height;
+        newNode.left = traverse(node.left);
+        newNode.right = traverse(node.right);
+        return newNode;
+      };
+      tree.root = traverse(lastState.tree.root);
+    } else {
+      tree.root = null;
+    }
+    
+    // Restore other state
+    setUsedValues(new Set(lastState.usedValues));
+    setScore(lastState.score);
+    setMoves(lastState.moves);
+    setGameHistory(prev => prev.slice(0, -1));
+    
+    updateGameState();
+  }, [gameHistory, tree, updateGameState]);
+
+  // Zoom and pan controls
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.2, 3));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.2, 0.3));
+  const handleResetView = () => {
+    setZoomLevel(1);
+    setPanX(0);
+    setPanY(0);
+  };
+
+  // Mouse drag for panning
+  const handleMouseDown = (e) => {
+    if (e.button !== 0) return; // Only left mouse button
+    const startX = e.clientX - panX;
+    const startY = e.clientY - panY;
+    
+    const handleMouseMove = (e) => {
+      setPanX(e.clientX - startX);
+      setPanY(e.clientY - startY);
+    };
+    
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const addNode = useCallback((value) => {
     if (gameStatus !== 'playing') return;
-    tree.add(nextValue);
-    setNextValue(nextValue + 1);
+    
+    let processedValue = value;
+    
+    // Process value based on data mode
+    if (dataMode === 'alphabet') {
+      // Convert to uppercase single letter
+      processedValue = value.toString().toUpperCase().charAt(0);
+      if (processedValue < 'A' || processedValue > 'Z') return;
+    } else {
+      // Process as number
+      const numValue = parseInt(value);
+      if (isNaN(numValue)) return;
+      processedValue = numValue;
+    }
+    
+    // Check if value already exists
+    if (usedValues.has(processedValue)) {
+      console.log(`Value ${processedValue} already exists in the tree!`);
+      return;
+    }
+    
+    // Save state before making changes (for undo)
+    if (gameMode === 'demo') {
+      saveGameState();
+    }
+    
+    // In protected mode, check if adding would exceed balance factor
+    if (isProtectedMode && gameMode === 'demo') {
+      // Temporarily add the node to check balance
+      const tempTree = new AVLTree();
+      if (tree.root) {
+        const cloneNode = (node) => {
+          if (!node) return null;
+          const newNode = new TreeNode(node.value);
+          newNode.height = node.height;
+          newNode.left = cloneNode(node.left);
+          newNode.right = cloneNode(node.right);
+          return newNode;
+        };
+        tempTree.root = cloneNode(tree.root);
+      }
+      tempTree.add(processedValue);
+      
+      if (tempTree.getMaxBalance() > 2) {
+        console.log(`Cannot add ${processedValue} - would exceed balance factor of 2 in protected mode!`);
+        return;
+      }
+    }
+    
+    if (treeMode === 'auto') {
+      tree.root = tree.autoBalanceInsert(tree.root, processedValue);
+    } else {
+      tree.add(processedValue);
+    }
+    
+    // Track the used value
+    setUsedValues(prev => new Set(prev).add(processedValue));
     setMoves(moves + 1);
     setScore(score + 10);
     updateGameState();
+  }, [gameStatus, treeMode, tree, moves, score, updateGameState, usedValues, saveGameState, isProtectedMode, gameMode, dataMode]);
+
+  const removeNode = (value) => {
+    if (gameStatus !== 'playing') return;
+    
+    // Save state before making changes (for undo)
+    if (gameMode === 'demo') {
+      saveGameState();
+    }
+    
+    tree.remove(value);
+    
+    // Remove from used values set
+    setUsedValues(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(value);
+      return newSet;
+    });
+    
+    setMoves(moves + 1);
+    setScore(score + 5);
+    setSelectedNode(null);
+    updateGameState();
+  };
+
+  const plantTree = () => {
+    const randomValue = generateRandomValue();
+    addNode(randomValue);
+  };
+
+  const addCustomNode = () => {
+    if (customValue.trim() === '') return;
+    addNode(customValue);
+    setCustomValue('');
   };
 
   const rotateNode = (value, dir) => {
@@ -186,55 +536,149 @@ function App() {
 
   const resetGame = () => {
     tree.root = null;
-    setNodes([]);
+    setTreeData({ nodes: [], edges: [] });
     setScore(0);
     setMoves(0);
     setMaxBalance(0);
     setGameStatus('playing');
-    setNextValue(1);
+    setUsedValues(new Set());
+    setSelectedNode(null);
+    setCustomValue('');
+    setRemoveValue('');
+    setGameHistory([]);
   };
 
-  const startPuzzleMode = () => {
-    resetGame();
-    setGameMode('puzzle');
-    // Add some initial trees
-    [10, 5, 15].forEach(val => tree.add(val));
-    setNextValue(20);
-    updateGameState();
+  const removeNodeByValue = () => {
+    const numValue = parseInt(removeValue);
+    if (isNaN(numValue) || !usedValues.has(numValue)) {
+      console.log(`Value ${numValue} does not exist in the tree!`);
+      return;
+    }
+    
+    removeNode(numValue);
+    setRemoveValue('');
   };
 
-  const startEndlessMode = () => {
+  const startMode = (mode, initialTreeMode = 'manual') => {
     resetGame();
-    setGameMode('endless');
-    tree.add(50);
-    setNextValue(51);
+    setGameMode(mode);
+    setTreeMode(initialTreeMode);
+    
+    if (mode === 'puzzle') {
+      // Add some initial trees for puzzle mode
+      const initialValues = [10, 5, 15, 3, 7];
+      initialValues.forEach(val => {
+        tree.add(val);
+      });
+      setUsedValues(new Set(initialValues));
+    } else if (mode === 'demo') {
+      // Demo mode with auto-balancing
+      const demoValues = [50, 30, 70, 20, 40, 60, 80];
+      demoValues.forEach(val => {
+        if (initialTreeMode === 'auto') {
+          tree.root = tree.autoBalanceInsert(tree.root, val);
+        } else {
+          tree.add(val);
+        }
+      });
+      setUsedValues(new Set(demoValues));
+    } else {
+      // Interactive or endless mode
+      if (mode === 'endless') {
+        tree.add(50);
+        setUsedValues(new Set([50]));
+      }
+    }
     updateGameState();
   };
 
   useEffect(() => {
-    if (gameMode === 'endless' && gameStatus === 'playing') {
+    if (gameMode === 'endless' && gameStatus === 'playing' && treeMode !== 'interactive') {
       const interval = setInterval(() => {
         if (gameStatus === 'playing') {
-          tree.add(nextValue);
-          setNextValue(prev => prev + 1);
-          setMoves(prev => prev + 1);
-          setScore(prev => prev + 10);
-          updateGameState();
+          const randomValue = generateRandomValue();
+          addNode(randomValue);
         }
       }, 3000);
       return () => clearInterval(interval);
     }
-  }, [gameMode, gameStatus, nextValue, tree, updateGameState]);
+  }, [gameMode, gameStatus, treeMode, addNode, generateRandomValue]);
 
   if (gameMode === 'menu') {
     return (
       <div className="app">
         <div className="menu">
           <h1>🌳 Balance Grove 🌳</h1>
-          <p>Keep the magical forest in harmony!</p>
-          <div className="menu-buttons">
-            <button onClick={startPuzzleMode}>🧩 Puzzle Mode</button>
-            <button onClick={startEndlessMode}>♾️ Endless Mode</button>
+          <p>Experience AVL Tree balancing in multiple ways!</p>
+          
+          <div className="mode-grid">
+            <div className="mode-card">
+              <h3>🎮 Interactive Mode</h3>
+              <p>Add and remove nodes freely. Perfect for learning!</p>
+              <div className="sub-modes">
+                <button onClick={() => startMode('interactive', 'manual')}>
+                  Manual Balancing
+                </button>
+                <button onClick={() => startMode('interactive', 'auto')}>
+                  Auto Balancing
+                </button>
+              </div>
+            </div>
+            
+            <div className="mode-card">
+              <h3>🧩 Puzzle Mode</h3>
+              <p>Balance pre-built challenging tree configurations</p>
+              <button onClick={() => startMode('puzzle', 'manual')}>
+                Start Puzzle
+              </button>
+            </div>
+            
+            <div className="mode-card">
+              <h3>♾️ Endless Mode</h3>
+              <p>Survive as long as possible with automatic node addition</p>
+              <div className="sub-modes">
+                <button onClick={() => startMode('endless', 'manual')}>
+                  Manual Challenge
+                </button>
+                <button onClick={() => startMode('endless', 'auto')}>
+                  Auto Demo
+                </button>
+              </div>
+            </div>
+            
+            <div className="mode-card">
+              <h3>📚 Demo Mode</h3>
+              <p>Add custom values, remove nodes, with protected/unprotected modes and undo functionality</p>
+              <div className="sub-modes">
+                <button onClick={() => startMode('demo', 'manual')}>
+                  Manual Demo
+                </button>
+                <button onClick={() => startMode('demo', 'auto')}>
+                  Auto Demo
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="help-section">
+            <button onClick={() => setShowHelp(!showHelp)} className="help-btn">
+              {showHelp ? 'Hide' : 'Show'} Help
+            </button>
+            {showHelp && (
+              <div className="help-content">
+                <h4>How to Play:</h4>
+                <ul>
+                  <li><strong>Manual Mode:</strong> Click red nodes to rotate and balance them</li>
+                  <li><strong>Auto Mode:</strong> Watch the tree self-balance automatically</li>
+                  <li><strong>Interactive:</strong> Add/remove any values you want</li>
+                  <li><strong>Demo Mode:</strong> Add custom values, remove specific nodes, use undo</li>
+                  <li><strong>Protected Mode:</strong> Cannot exceed balance factor ±2</li>
+                  <li><strong>Unprotected Mode:</strong> Can exceed balance factor (for learning)</li>
+                  <li><strong>Balance Factor:</strong> Shown above each node (should be -1, 0, or 1)</li>
+                  <li><strong>Goal:</strong> Keep the tree balanced and learn AVL operations</li>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -244,177 +688,314 @@ function App() {
   return (
     <div className="app">
       <header className="game-header">
-        <button onClick={() => setGameMode('menu')}>← Back to Menu</button>
-        <h2>🌳 Balance Grove - {gameMode === 'puzzle' ? 'Puzzle' : 'Endless'}</h2>
-        <div className="stats">
-          <span>Score: {score}</span>
-          <span>Moves: {moves}</span>
-          <span className={maxBalance > 1 ? 'warning' : ''}>
-            Balance: {maxBalance > 1 ? '⚠️ ' + maxBalance : '✅ ' + maxBalance}
+        <button onClick={() => setGameMode('menu')} className="back-btn">
+          ← Back to Menu
+        </button>
+        <div className="mode-info">
+          <h2>🌳 Balance Grove</h2>
+          <span className="mode-badge">
+            {gameMode.charAt(0).toUpperCase() + gameMode.slice(1)} - {treeMode.charAt(0).toUpperCase() + treeMode.slice(1)}
           </span>
+        </div>
+        <div className="stats">
+          <div className="stat">
+            <span className="stat-label">Score</span>
+            <span className="stat-value">{score}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Moves</span>
+            <span className="stat-value">{moves}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Max Balance</span>
+            <span className={`stat-value ${maxBalance > 1 ? 'warning' : 'good'}`}>
+              {maxBalance > 1 ? '⚠️ ' + maxBalance : '✅ ' + maxBalance}
+            </span>
+          </div>
         </div>
       </header>
 
       <main className="game-area">
-        <div className="forest" style={{ 
-          background: maxBalance > 1 ? '#ffebee' : '#e8f5e8',
+        <div className="tree-container" style={{ 
+          background: maxBalance > 1 ? 'rgba(255, 107, 107, 0.05)' : 'rgba(78, 205, 196, 0.03)',
           transition: 'background 0.5s ease'
         }}>
-          <svg width="100%" height="400" viewBox="0 0 800 400">
-            {nodes.map((node, index) => (
-              <g key={node.value}>
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r="20"
-                  fill={Math.abs(node.balance) > 1 ? '#ff6b6b' : '#4caf50'}
-                  stroke={imbalancedNodes.includes(node.value) ? '#ffd600' : (Math.abs(node.balance) > 1 ? '#d32f2f' : '#2e7d32')}
-                  strokeWidth={selectedNode === node.value ? 5 : 2}
-                  style={{
-                    filter: Math.abs(node.balance) > 1 ? 'drop-shadow(0 0 10px rgba(255,0,0,0.5))' : 'none',
-                    animation: Math.abs(node.balance) > 1 ? 'shake 0.5s infinite' : 'none',
-                    cursor: imbalancedNodes.includes(node.value) ? 'pointer' : 'default'
-                  }}
-                  onClick={() => imbalancedNodes.includes(node.value) && setSelectedNode(node.value)}
-                />
-                <rect
-                  x={node.x - 3}
-                  y={node.y + 15}
-                  width="6"
-                  height="15"
-                  fill="#8d6e63"
-                />
-                <text
-                  x={node.x}
-                  y={node.y + 5}
-                  textAnchor="middle"
-                  fill="white"
-                  fontSize="12"
-                  fontWeight="bold"
-                >
-                  {node.value}
-                </text>
-                {/* Balance factor display */}
-                <text
-                  x={node.x}
-                  y={node.y - 30}
-                  textAnchor="middle"
-                  fill={Math.abs(node.balance) > 1 ? '#ff1744' : '#2e7d32'}
-                  fontSize="10"
-                  fontWeight="bold"
-                >
-                  BF: {node.balance}
-                </text>
-                {/* Rotation controls for selected node */}
-                {selectedNode === node.value && (
-                  <g>
-                    <rect x={node.x - 50} y={node.y - 50} width="100" height="40" rx="8" fill="#fffde7" stroke="#ffd600" strokeWidth="2" />
-                    <text x={node.x} y={node.y - 35} textAnchor="middle" fill="#333" fontSize="12" fontWeight="bold">Choose Rotation</text>
-                    {/* Left rotation button - only if right child exists */}
-                    {(() => {
-                      const findNode = (n, val) => {
-                        if (!n) return null;
-                        if (n.value === val) return n;
-                        return findNode(n.left, val) || findNode(n.right, val);
-                      };
-                      const targetNode = findNode(tree.root, node.value);
-                      const canRotateLeft = targetNode && targetNode.right;
-                      const canRotateRight = targetNode && targetNode.left;
-                      
-                      return (
-                        <>
-                          <rect 
-                            x={node.x - 45} 
-                            y={node.y - 25} 
-                            width="35" 
-                            height="18" 
-                            rx="4" 
-                            fill={canRotateLeft ? "#4caf50" : "#cccccc"} 
-                            style={{ cursor: canRotateLeft ? 'pointer' : 'not-allowed' }} 
-                            onClick={canRotateLeft ? () => rotateNode(node.value, 'left') : undefined} 
-                          />
-                          <text 
-                            x={node.x - 27.5} 
-                            y={node.y - 13} 
-                            textAnchor="middle" 
-                            fill="white" 
-                            fontSize="10" 
-                            fontWeight="bold"
-                            style={{ cursor: canRotateLeft ? 'pointer' : 'not-allowed' }} 
-                            onClick={canRotateLeft ? () => rotateNode(node.value, 'left') : undefined}
-                          >
-                            ⟲ Left
-                          </text>
-                          
-                          <rect 
-                            x={node.x + 10} 
-                            y={node.y - 25} 
-                            width="35" 
-                            height="18" 
-                            rx="4" 
-                            fill={canRotateRight ? "#4caf50" : "#cccccc"} 
-                            style={{ cursor: canRotateRight ? 'pointer' : 'not-allowed' }} 
-                            onClick={canRotateRight ? () => rotateNode(node.value, 'right') : undefined} 
-                          />
-                          <text 
-                            x={node.x + 27.5} 
-                            y={node.y - 13} 
-                            textAnchor="middle" 
-                            fill="white" 
-                            fontSize="10" 
-                            fontWeight="bold"
-                            style={{ cursor: canRotateRight ? 'pointer' : 'not-allowed' }} 
-                            onClick={canRotateRight ? () => rotateNode(node.value, 'right') : undefined}
-                          >
-                            ⟳ Right
-                          </text>
-                        </>
-                      );
-                    })()}
-                    
-                    {/* Cancel button */}
-                    <rect x={node.x - 15} y={node.y + 5} width="30" height="15" rx="3" fill="#ff9800" style={{ cursor: 'pointer' }} onClick={() => setSelectedNode(null)} />
-                    <text x={node.x} y={node.y + 15} textAnchor="middle" fill="white" fontSize="9" style={{ cursor: 'pointer' }} onClick={() => setSelectedNode(null)}>Cancel</text>
-                  </g>
-                )}
-              </g>
-            ))}
+          <div className="zoom-controls">
+            <button onClick={handleZoomOut} className="zoom-btn">−</button>
+            <span className="zoom-level">{Math.round(zoomLevel * 100)}%</span>
+            <button onClick={handleZoomIn} className="zoom-btn">+</button>
+            <button onClick={handleResetView} className="reset-view-btn">⌂</button>
+          </div>
+          
+          <svg 
+            width="100%" 
+            height="400" 
+            viewBox="0 0 800 400" 
+            className="tree-svg"
+            onMouseDown={handleMouseDown}
+            style={{ cursor: 'grab' }}
+          >
+            {/* Define gradients and effects */}
+            <defs>
+              <linearGradient id="balancedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style={{stopColor: '#4ecdc4', stopOpacity: 1}} />
+                <stop offset="100%" style={{stopColor: '#44a08d', stopOpacity: 1}} />
+              </linearGradient>
+              <linearGradient id="imbalancedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style={{stopColor: '#ff6b6b', stopOpacity: 1}} />
+                <stop offset="100%" style={{stopColor: '#ee5a52', stopOpacity: 1}} />
+              </linearGradient>
+            </defs>
+            
+            <g transform={`translate(${panX}, ${panY}) scale(${zoomLevel})`}>
+            {/* Render nodes only */}
+            {treeData.nodes.map((node, index) => {
+              const isImbalanced = Math.abs(node.balance) > 1;
+              const isSelected = selectedNode === node.value;
+              
+              const nodeClasses = [
+                'tree-node',
+                isImbalanced ? 'imbalanced' : 'balanced',
+                isSelected ? 'selected' : ''
+              ].filter(Boolean).join(' ');
+              
+              return (
+                <g key={node.value} className={nodeClasses}>
+                  {/* Node shadow */}
+                  <circle
+                    cx={node.x + 3}
+                    cy={node.y + 3}
+                    r="28"
+                    className="node-shadow"
+                  />
+                  
+                  {/* Main node circle */}
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r="28"
+                    className="node-circle"
+                    onClick={() => {
+                      if (treeMode === 'interactive') {
+                        setSelectedNode(selectedNode === node.value ? null : node.value);
+                      } else if (treeMode === 'manual' && isImbalanced) {
+                        setSelectedNode(node.value);
+                      }
+                    }}
+                  />
+                  
+                  {/* Node value */}
+                  <text
+                    x={node.x}
+                    y={node.y + 2}
+                    className="node-value"
+                  >
+                    {node.value}
+                  </text>
+                  
+                  {/* Balance factor badge */}
+                  <rect
+                    x={node.x - 18}
+                    y={node.y - 50}
+                    width="36"
+                    height="20"
+                    rx="10"
+                    className={`balance-badge ${Math.abs(node.balance) > 1 ? 'imbalanced' : 'balanced'}`}
+                  />
+                  <text
+                    x={node.x}
+                    y={node.y - 38}
+                    className="balance-text"
+                  >
+                    {node.balance}
+                  </text>
+                  
+                  {/* Height indicator */}
+                  <text
+                    x={node.x + 40}
+                    y={node.y + 5}
+                    className="height-text"
+                  >
+                    H:{node.height}
+                  </text>
+                </g>
+              );
+            })}
+            </g>
           </svg>
         </div>
 
-        <div className="controls">
-          <button 
-            onClick={plantTree} 
-            disabled={gameStatus !== 'playing'}
-            className="plant-btn"
-          >
-            🌱 Plant Tree ({nextValue})
-          </button>
-          <button onClick={resetGame} className="reset-btn">
-            🔄 Reset Grove
+        {/* Controls Panel */}
+        <div className="controls-panel">
+          <div className="control-section">
+            <h3>Tree Operations</h3>
+            <div className="control-group">
+              {gameMode === 'demo' ? (
+                <>
+                  <div className="input-group">
+                    <input
+                      type="number"
+                      value={customValue}
+                      onChange={(e) => setCustomValue(e.target.value)}
+                      placeholder="Add value"
+                      onKeyPress={(e) => e.key === 'Enter' && addCustomNode()}
+                    />
+                    <button onClick={addCustomNode} disabled={gameStatus !== 'playing'}>
+                      ➕ Add Node
+                    </button>
+                  </div>
+                  <div className="input-group">
+                    <input
+                      type="number"
+                      value={removeValue}
+                      onChange={(e) => setRemoveValue(e.target.value)}
+                      placeholder="Remove value"
+                      onKeyPress={(e) => e.key === 'Enter' && removeNodeByValue()}
+                    />
+                    <button onClick={removeNodeByValue} disabled={gameStatus !== 'playing'}>
+                      🗑️ Remove
+                    </button>
+                  </div>
+                </>
+              ) : treeMode === 'interactive' ? (
+                <>
+                  <div className="input-group">
+                    <input
+                      type="number"
+                      value={customValue}
+                      onChange={(e) => setCustomValue(e.target.value)}
+                      placeholder="Enter value"
+                      onKeyPress={(e) => e.key === 'Enter' && addCustomNode()}
+                    />
+                    <button onClick={addCustomNode} disabled={gameStatus !== 'playing'}>
+                      ➕ Add Node
+                    </button>
+                  </div>
+                  {selectedNode !== null && (
+                    <button 
+                      onClick={() => removeNode(selectedNode)} 
+                      className="remove-btn"
+                      disabled={gameStatus !== 'playing'}
+                    >
+                      🗑️ Remove {selectedNode}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button 
+                  onClick={plantTree} 
+                  disabled={gameStatus !== 'playing'}
+                  className="plant-btn"
+                >
+                  🌱 Add Random Tree
+                </button>
+              )}
+            </div>
+          </div>
+          
+          <div className="control-section">
+            <h3>Actions</h3>
+            <div className="control-group">
+              {gameMode === 'demo' && (
+                <>
+                  <button 
+                    onClick={() => setIsProtectedMode(!isProtectedMode)} 
+                    className={`mode-toggle ${isProtectedMode ? 'protected' : 'unprotected'}`}
+                  >
+                    {isProtectedMode ? '🛡️ Protected' : '⚠️ Unprotected'}
+                  </button>
+                  <button 
+                    onClick={undoLastAction} 
+                    disabled={gameHistory.length === 0}
+                    className="undo-btn"
+                  >
+                    ↶ Undo ({gameHistory.length})
+                  </button>
+                </>
+              )}
+              <button onClick={resetGame} className="reset-btn">
+                🔄 Reset Tree
+              </button>
+              <button onClick={() => setTreeMode(treeMode === 'auto' ? 'manual' : 'auto')} className="mode-toggle">
+                🔀 Switch to {treeMode === 'auto' ? 'Manual' : 'Auto'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Rotation Controls Overlay */}
+      {selectedNode !== null && treeMode === 'manual' && (
+        <div className="rotation-overlay">
+          <div className="rotation-panel">
+            <h4>Balance Node {selectedNode}</h4>
+            <div className="rotation-buttons">
+              {(() => {
+                const findNode = (n, val) => {
+                  if (!n) return null;
+                  if (n.value === val) return n;
+                  return findNode(n.left, val) || findNode(n.right, val);
+                };
+                const targetNode = findNode(tree.root, selectedNode);
+                const canRotateLeft = targetNode && targetNode.right;
+                const canRotateRight = targetNode && targetNode.left;
+                
+                return (
+                  <>
+                    <button 
+                      onClick={() => rotateNode(selectedNode, 'left')}
+                      disabled={!canRotateLeft}
+                      className={`rotation-btn ${!canRotateLeft ? 'disabled' : ''}`}
+                    >
+                      ⟲ Rotate Left
+                    </button>
+                    <button 
+                      onClick={() => rotateNode(selectedNode, 'right')}
+                      disabled={!canRotateRight}
+                      className={`rotation-btn ${!canRotateRight ? 'disabled' : ''}`}
+                    >
+                      ⟳ Rotate Right
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+            <button onClick={() => {
+              setSelectedNode(null);
+            }} className="cancel-btn">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Status Messages */}
+      {gameStatus === 'lost' && (
+        <div className="status-overlay">
+          <div className="game-over-panel">
+            <h3>🌪️ Tree Collapsed!</h3>
+            <p>The tree became too imbalanced (balance factor &gt; 2)</p>
+            <p>Final Score: <strong>{score}</strong></p>
+            <button onClick={resetGame} className="retry-btn">Try Again</button>
+          </div>
+        </div>
+      )}
+
+      {maxBalance > 1 && gameStatus === 'playing' && treeMode === 'manual' && (
+        <div className="warning-icon-container">
+          <button className="warning-icon-btn">
+            ⚠️
+            <div className="warning-tooltip">
+              <div className="warning-tooltip-text">
+                Tree is becoming imbalanced! Balance factor: {maxBalance}
+              </div>
+              <div className="warning-tooltip-help">
+                Click red nodes to balance them
+              </div>
+            </div>
           </button>
         </div>
-
-        {gameStatus === 'lost' && (
-          <div className="game-over">
-            <h3>🌪️ The Grove is Too Imbalanced!</h3>
-            <p>The forest spirits are upset. Balance factor exceeded 2!</p>
-            <p>Final Score: {score}</p>
-            <button onClick={resetGame}>Try Again</button>
-          </div>
-        )}
-
-        {maxBalance > 1 && gameStatus === 'playing' && (
-          <div className="warning-message">
-            ⚠️ The grove is becoming imbalanced! Current balance: {maxBalance}
-            {imbalancedNodes.length > 0 && (
-              <div style={{ marginTop: '0.5rem', color: '#d32f2f' }}>
-                Select a red tree and choose a rotation to restore balance.
-              </div>
-            )}
-          </div>
-        )}
-      </main>
+      )}
     </div>
   );
 }
