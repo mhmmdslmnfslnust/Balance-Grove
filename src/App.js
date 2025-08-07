@@ -1,4 +1,4 @@
-// App.js
+﻿// App.js
 // Completely rewritten Balance Grove game
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
@@ -241,6 +241,10 @@ class AVLTree {
     traverse(this.root);
     return { nodes: result, edges };
   }
+  
+  clear() {
+    this.root = null;
+  }
 }
 
 function App() {
@@ -249,6 +253,8 @@ function App() {
   const [gameMode, setGameMode] = useState('menu');
   const [treeMode, setTreeMode] = useState('manual'); // 'manual', 'auto', 'interactive'
   const [dataMode, setDataMode] = useState('numbers'); // 'numbers', 'alphabet'
+  const [puzzleDifficulty, setPuzzleDifficulty] = useState('easy'); // 'easy', 'medium', 'hard'
+  const [currentPuzzle, setCurrentPuzzle] = useState(null); // Stores the target state for puzzle
   const [score, setScore] = useState(0);
   const [moves, setMoves] = useState(0);
   const [combo, setCombo] = useState(0);
@@ -316,6 +322,149 @@ function App() {
     
     return newValue;
   }, [usedValues, dataMode]);
+
+  // Generate unbalanced BST for puzzle mode
+  const generatePuzzleBST = useCallback((difficulty) => {
+    const nodeCount = difficulty === 'easy' ? 5 + Math.floor(Math.random() * 3) : // 5-7 nodes
+                     difficulty === 'medium' ? 8 + Math.floor(Math.random() * 5) : // 8-12 nodes
+                     13 + Math.floor(Math.random() * 8); // 13-20 nodes for hard
+    
+    // Generate values to use
+    const values = [];
+    const tempUsedValues = new Set();
+    
+    for (let i = 0; i < nodeCount; i++) {
+      let value;
+      if (dataMode === 'alphabet') {
+        do {
+          value = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        } while (tempUsedValues.has(value));
+      } else {
+        do {
+          value = Math.floor(Math.random() * 99) + 1;
+        } while (tempUsedValues.has(value));
+      }
+      values.push(value);
+      tempUsedValues.add(value);
+    }
+    
+    // Sort values and insert in a way that creates an unbalanced tree
+    values.sort((a, b) => {
+      if (dataMode === 'alphabet') return a.localeCompare(b);
+      return a - b;
+    });
+    
+    // Create insertion order that produces worst-case unbalanced tree
+    let insertionOrder;
+    if (difficulty === 'easy') {
+      // Simple unbalanced: insert in sorted order (creates right-skewed tree)
+      insertionOrder = values;
+    } else if (difficulty === 'medium') {
+      // Mixed pattern: some ascending, some random
+      insertionOrder = [...values.slice(0, Math.floor(values.length/2))];
+      const remaining = values.slice(Math.floor(values.length/2));
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        insertionOrder.push(remaining[i]);
+      }
+    } else {
+      // Hard: create worst-case scenarios with specific patterns
+      insertionOrder = [];
+      // Insert in a pattern that creates maximum imbalance
+      for (let i = 0; i < values.length; i += 2) {
+        insertionOrder.push(values[i]);
+      }
+      for (let i = 1; i < values.length; i += 2) {
+        insertionOrder.push(values[i]);
+      }
+    }
+    
+    return {
+      insertionOrder,
+      targetNodes: nodeCount,
+      difficulty
+    };
+  }, [dataMode]);
+
+  // Check if puzzle is solved (all balance factors are -1, 0, or 1)
+  const isPuzzleSolved = useCallback(() => {
+    if (gameMode !== 'puzzle' || !currentPuzzle) return false;
+    
+    const checkNode = (node) => {
+      if (!node) return true;
+      const balance = tree.getBalance(node);
+      if (Math.abs(balance) > 1) return false;
+      return checkNode(node.left) && checkNode(node.right);
+    };
+    
+    return checkNode(tree.root);
+  }, [gameMode, currentPuzzle, tree]);
+
+  // Puzzle generation and start function
+  const startPuzzle = useCallback((difficulty) => {
+    // Reset game state inline instead of calling resetGame
+    tree.root = null;
+    setTreeData({ nodes: [], edges: [] });
+    setScore(0);
+    setMoves(0);
+    setCombo(0);
+    setPerfectMoves(0);
+    setLevel(1);
+    setAchievements(new Set());
+    setMaxBalance(0);
+    setGameStatus('playing');
+    setUsedValues(new Set());
+    setSelectedNode(null);
+    setCustomValue('');
+    setRemoveValue('');
+    setGameHistory([]);
+    setRedoHistory([]);
+    
+    setGameMode('puzzle');
+    setTreeMode('manual'); // Puzzle mode is always manual
+    setPuzzleDifficulty(difficulty);
+    
+    // Generate and build the unbalanced tree
+    const puzzle = generatePuzzleBST(difficulty);
+    setCurrentPuzzle(puzzle);
+    
+    // Clear tree and insert values in unbalanced order
+    tree.clear();
+    puzzle.insertionOrder.forEach(value => {
+      tree.add(value);
+    });
+    
+    // Update tree data and state manually
+    const data = tree.toArray();
+    setTreeData(data);
+    const balance = tree.getMaxBalance();
+    setMaxBalance(balance);
+    // Set used values to track what's in the tree
+    const usedVals = new Set(puzzle.insertionOrder);
+    setUsedValues(usedVals);
+  }, [generatePuzzleBST, tree]);
+
+  // Check puzzle completion after each move
+  useEffect(() => {
+    if (gameMode === 'puzzle' && gameStatus === 'playing') {
+      if (isPuzzleSolved()) {
+        // Calculate bonus score based on difficulty and efficiency
+        const baseScore = puzzleDifficulty === 'easy' ? 500 : 
+                         puzzleDifficulty === 'medium' ? 1000 : 1500;
+        const efficiencyBonus = Math.max(0, 100 - moves * 10); // Bonus for fewer moves
+        const totalScore = baseScore + efficiencyBonus + (combo * 50);
+        
+        setScore(prev => prev + totalScore);
+        setGameStatus('won');
+        
+        // Show puzzle completion message
+        setTimeout(() => {
+          if (window.confirm(`🎉 Puzzle Solved! Score: ${totalScore}\n\nTry another puzzle?`)) {
+            startPuzzle(puzzleDifficulty);
+          }
+        }, 500);
+      }
+    }
+  }, [gameMode, gameStatus, isPuzzleSolved, puzzleDifficulty, moves, combo, startPuzzle]);
 
   // Enhanced Scoring and Gamification System
   const calculateScore = useCallback((actionType, beforeBalance, afterBalance, isBalancing = false) => {
@@ -842,6 +991,17 @@ function App() {
           <h1>🌳 Balance Grove 🌳</h1>
           <p>Experience AVL Tree balancing in multiple ways!</p>
           
+          <div className="github-section">
+            <a 
+              href="https://github.com/mhmmdslmnfslnust/Balance-Grove" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="github-link-menu"
+            >
+              📂 View on GitHub
+            </a>
+          </div>
+          
           <div className="data-mode-selection">
             <h3>Data Type:</h3>
             <div className="toggle-buttons">
@@ -862,8 +1022,21 @@ function App() {
           
           <div className="mode-grid">
             <div className="mode-card">
+              <h3>📚 Demo Mode</h3>
+              <p>Learn AVL tree operations step by step with guided examples</p>
+              <div className="sub-modes">
+                <button onClick={() => startMode('demo', 'manual')}>
+                  Manual Learning
+                </button>
+                <button onClick={() => startMode('demo', 'auto')}>
+                  Watch Demo
+                </button>
+              </div>
+            </div>
+            
+            <div className="mode-card">
               <h3>🎮 Interactive Mode</h3>
-              <p>Add and remove nodes freely. Perfect for learning!</p>
+              <p>Free play! Add and remove any nodes you want</p>
               <div className="sub-modes">
                 <button onClick={() => startMode('interactive', 'manual')}>
                   Manual Balancing
@@ -874,36 +1047,18 @@ function App() {
               </div>
             </div>
             
-            <div className="mode-card">
+            <div className="mode-card puzzle-card">
               <h3>🧩 Puzzle Mode</h3>
-              <p>Balance pre-built challenging tree configurations</p>
-              <button onClick={() => startMode('puzzle', 'manual')}>
-                Start Puzzle
-              </button>
-            </div>
-            
-            <div className="mode-card">
-              <h3>♾️ Endless Mode</h3>
-              <p>Survive as long as possible with automatic node addition</p>
-              <div className="sub-modes">
-                <button onClick={() => startMode('endless', 'manual')}>
-                  Manual Challenge
+              <p>Fix unbalanced trees! Get a random BST and balance it efficiently</p>
+              <div className="difficulty-selection">
+                <button onClick={() => startPuzzle('easy')}>
+                  Easy (5-7 nodes)
                 </button>
-                <button onClick={() => startMode('endless', 'auto')}>
-                  Auto Demo
+                <button onClick={() => startPuzzle('medium')}>
+                  Medium (8-12 nodes)
                 </button>
-              </div>
-            </div>
-            
-            <div className="mode-card">
-              <h3>📚 Demo Mode</h3>
-              <p>Add custom values, remove nodes, with protected/unprotected modes and undo functionality</p>
-              <div className="sub-modes">
-                <button onClick={() => startMode('demo', 'manual')}>
-                  Manual Demo
-                </button>
-                <button onClick={() => startMode('demo', 'auto')}>
-                  Auto Demo
+                <button onClick={() => startPuzzle('hard')}>
+                  Hard (13-20 nodes)
                 </button>
               </div>
             </div>
@@ -917,14 +1072,13 @@ function App() {
               <div className="help-content">
                 <h4>How to Play:</h4>
                 <ul>
-                  <li><strong>Manual Mode:</strong> Click red nodes to rotate and balance them</li>
-                  <li><strong>Auto Mode:</strong> Watch the tree self-balance automatically</li>
-                  <li><strong>Interactive:</strong> Add/remove any values you want</li>
-                  <li><strong>Demo Mode:</strong> Add custom values, remove specific nodes, use undo</li>
-                  <li><strong>Protected Mode:</strong> Cannot exceed balance factor ±2</li>
-                  <li><strong>Unprotected Mode:</strong> Can exceed balance factor (for learning)</li>
+                  <li><strong>Demo Mode:</strong> Learn AVL operations with guided examples and preset trees</li>
+                  <li><strong>Interactive Mode:</strong> Free play - add/remove any values you want</li>
+                  <li><strong>Puzzle Mode:</strong> Fix randomly generated unbalanced BSTs for points</li>
+                  <li><strong>Manual Balancing:</strong> Click red nodes to rotate and balance them yourself</li>
+                  <li><strong>Auto Balancing:</strong> Watch the tree self-balance automatically</li>
                   <li><strong>Balance Factor:</strong> Shown above each node (should be -1, 0, or 1)</li>
-                  <li><strong>Goal:</strong> Keep the tree balanced and learn AVL operations</li>
+                  <li><strong>Goal:</strong> Keep the tree balanced and learn AVL operations efficiently</li>
                 </ul>
               </div>
             )}
@@ -975,6 +1129,17 @@ function App() {
             <div className="stat">
               <span className="stat-label">🎯 Perfect</span>
               <span className="stat-value perfect-moves">{perfectMoves}</span>
+            </div>
+          )}
+          {achievements.size > 0 && (
+            <div className="stat achievements-compact">
+              <span className="stat-label">🏆 Achievements</span>
+              <div className="achievements-mini">
+                {achievements.has('combo_master') && <span title="Combo Master">🔥</span>}
+                {achievements.has('rotation_expert') && <span title="Rotation Expert">🎯</span>}
+                {achievements.has('perfect_balance') && <span title="Perfect Balance">⚖️</span>}
+                {achievements.has('tree_master') && <span title="Tree Master">🌳</span>}
+              </div>
             </div>
           )}
         </div>
@@ -1139,6 +1304,25 @@ function App() {
                     </button>
                   </div>
                 </>
+              ) : gameMode === 'puzzle' ? (
+                <>
+                  <div className="puzzle-info">
+                    <h4>🧩 Puzzle Challenge</h4>
+                    <p>Balance this tree using rotations! Difficulty: <strong>{puzzleDifficulty.toUpperCase()}</strong></p>
+                    <p>Target: Get all balance factors to -1, 0, or 1</p>
+                  </div>
+                  <button 
+                    onClick={() => startPuzzle(puzzleDifficulty)} 
+                    className="new-puzzle-btn"
+                  >
+                    🔄 New {puzzleDifficulty} Puzzle
+                  </button>
+                  <div className="puzzle-controls">
+                    <button onClick={() => startPuzzle('easy')}>Easy</button>
+                    <button onClick={() => startPuzzle('medium')}>Medium</button>
+                    <button onClick={() => startPuzzle('hard')}>Hard</button>
+                  </div>
+                </>
               ) : treeMode === 'interactive' ? (
                 <>
                   <div className="input-group">
@@ -1165,13 +1349,37 @@ function App() {
                   )}
                 </>
               ) : (
-                <button 
-                  onClick={plantTree} 
-                  disabled={gameStatus !== 'playing'}
-                  className="plant-btn"
-                >
-                  � Add Preset Tree
-                </button>
+                <>
+                  <button 
+                    onClick={plantTree} 
+                    disabled={gameStatus !== 'playing'}
+                    className="plant-btn"
+                  >
+                    🌳 Add Preset Tree
+                  </button>
+                  <div className="input-group">
+                    <input
+                      type="text"
+                      value={customValue}
+                      onChange={(e) => setCustomValue(e.target.value)}
+                      placeholder={dataMode === 'alphabet' ? 'Enter letter (A-Z)' : 'Enter value (1-99)'}
+                      maxLength={dataMode === 'alphabet' ? 1 : undefined}
+                      onKeyPress={(e) => e.key === 'Enter' && addCustomNode()}
+                    />
+                    <button onClick={addCustomNode} disabled={gameStatus !== 'playing'}>
+                      ➕ Add Node
+                    </button>
+                  </div>
+                  {selectedNode !== null && (
+                    <button 
+                      onClick={() => removeNode(selectedNode)} 
+                      className="remove-btn"
+                      disabled={gameStatus !== 'playing'}
+                    >
+                      🗑️ Remove {selectedNode}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -1211,39 +1419,6 @@ function App() {
               </button>
             </div>
           </div>
-          
-          {/* Achievements Panel */}
-          {achievements.size > 0 && (
-            <div className="control-section achievements-section">
-              <h3>🏆 Achievements</h3>
-              <div className="achievements-grid">
-                {achievements.has('combo_master') && (
-                  <div className="achievement">
-                    <span className="achievement-icon">🔥</span>
-                    <span className="achievement-name">Combo Master</span>
-                  </div>
-                )}
-                {achievements.has('rotation_expert') && (
-                  <div className="achievement">
-                    <span className="achievement-icon">🎯</span>
-                    <span className="achievement-name">Rotation Expert</span>
-                  </div>
-                )}
-                {achievements.has('perfect_balance') && (
-                  <div className="achievement">
-                    <span className="achievement-icon">⚖️</span>
-                    <span className="achievement-name">Perfect Balance</span>
-                  </div>
-                )}
-                {achievements.has('tree_master') && (
-                  <div className="achievement">
-                    <span className="achievement-icon">🌳</span>
-                    <span className="achievement-name">Tree Master</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </main>
 

@@ -66,9 +66,34 @@ body {
 .menu p {
   font-size: 1.3rem;
   color: #a0a0a0;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
   max-width: 600px;
   line-height: 1.6;
+}
+
+/* GitHub Section */
+.github-section {
+  margin-bottom: 2rem;
+}
+
+.github-link-menu {
+  display: inline-block;
+  color: #f0f0f0;
+  text-decoration: none;
+  padding: 0.8rem 2rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #333 0%, #555 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.github-link-menu:hover {
+  background: linear-gradient(135deg, #444 0%, #666 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 /* Data Mode Selection */
@@ -205,6 +230,97 @@ body {
   transform: translateY(0);
 }
 
+/* Puzzle Mode Specific */
+.puzzle-card {
+  border: 2px solid rgba(255, 193, 7, 0.3);
+}
+
+.puzzle-card::before {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 152, 0, 0.1));
+}
+
+.difficulty-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.difficulty-selection button {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+}
+
+.difficulty-selection button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 152, 0, 0.4);
+}
+
+/* Puzzle Controls */
+.puzzle-info {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.puzzle-info h4 {
+  color: #ffc107;
+  margin-bottom: 0.5rem;
+}
+
+.puzzle-info p {
+  margin: 0.3rem 0;
+  font-size: 0.9rem;
+  color: #e1e1e1;
+}
+
+.new-puzzle-btn {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 1rem;
+  width: 100%;
+  transition: all 0.3s ease;
+}
+
+.new-puzzle-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+}
+
+.puzzle-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.puzzle-controls button {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e1e1e1;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.puzzle-controls button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 /* Help Section */
 .help-section {
   margin-top: 2rem;
@@ -297,6 +413,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 0.5rem;
 }
 
 .mode-info h2 {
@@ -313,8 +430,24 @@ body {
   border-radius: 20px;
   font-size: 0.8rem;
   font-weight: 600;
-  margin-top: 0.5rem;
   box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+}
+
+.github-link {
+  color: #f0f0f0;
+  text-decoration: none;
+  padding: 0.3rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.github-link:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 .stats {
@@ -358,6 +491,28 @@ body {
 @keyframes pulse-warning {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+/* Compact achievements in header */
+.achievements-compact {
+  min-width: 120px;
+}
+
+.achievements-mini {
+  display: flex;
+  gap: 0.3rem;
+  font-size: 1.2rem;
+}
+
+.achievements-mini span {
+  cursor: help;
+  opacity: 0.9;
+  transition: all 0.3s ease;
+}
+
+.achievements-mini span:hover {
+  opacity: 1;
+  transform: scale(1.2);
 }
 
 /* Game Area - Tree Visualization */
